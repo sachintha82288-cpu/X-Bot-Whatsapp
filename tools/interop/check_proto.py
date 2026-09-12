@@ -40,6 +40,12 @@ def convert_one(field, val):
         return base64.b64decode(val)
     if kind == "msg":
         return convert(val, target) if isinstance(val, dict) else val
+    if kind == "enum":
+        # vector JSON carries the enum *name*, our decoder returns the number
+        if isinstance(val, str):
+            number = pb.enum_value(target or "", val)
+            return number if number is not None else val
+        return int(val)
     if kind == "bool":
         return bool(val)
     if kind in ("int", "sint", "fixed32", "fixed64"):

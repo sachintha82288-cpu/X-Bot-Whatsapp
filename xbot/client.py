@@ -22,9 +22,11 @@ from .crypto import curve
 from .crypto.aes import ctr_crypt, unpad_pkcs7
 from .crypto.hashes import fast_sha256 as sha256
 from .crypto.hashes import hmac_sha256, md5, pbkdf2_sha256
+from .media import MediaSupport, guess_type, mimetype_for
 from .store import AuthStore, b64, encode_big_endian, unb64
 from .wa import binary, protobuf as pb
 from .wa import signal as sig
+from .wa.binary import Node
 from .wa.noise import NOISE_HEADER, NoiseHandler
 from .wa.ws import WebSocketClient, WebSocketError
 
@@ -194,7 +196,7 @@ def is_hosted_jid(jid: Optional[str]) -> bool:
 # --------------------------------------------------------------------------
 
 
-class WAClient:
+class WAClient(MediaSupport):
     """A WhatsApp companion-device client."""
 
     def __init__(self, store: AuthStore, config: Optional[dict] = None, logger=None):
@@ -219,6 +221,7 @@ class WAClient:
         self.connected = False
         self.last_disconnect_reason: Optional[str] = None
         self.incoming: "queue.Queue[dict]" = queue.Queue()
+        self.known_chats = set()
 
         self._handlers: Dict[str, List[Callable]] = {}
         self._queries: Dict[str, dict] = {}
@@ -882,6 +885,58 @@ class WAClient:
                                     "jid": entry["jid"], "server": server})
         return results
 
+    def query_usync_contact(self, numbers: List[str]) -> Dict[str, dict]:
+        """Check which phone numbers exist on WhatsApp (USync contact protocol)."""
+        numbers = [str(number).lstrip("+").split("@")[0].split(":")[0] for number in numbers]
+        numbers = [number for number in numbers if number]
+        if not numbers:
+            return {}
+        user_nodes = [
+            Node("user", {}, [Node("contact", {}, f"+{number}".encode())])
+            for number in numbers
+        ]
+        iq = Node("iq", {"to": S_WHATSAPP_NET, "type": "get", "xmlns": "usync"}, [
+            Node("usync", {"context": "interactive", "mode": "query", "sid": self.next_tag(),
+                           "last": "true", "index": "0"}, [
+                Node("query", {}, [Node("contact", {})]),
+                Node("list", {}, user_nodes),
+            ]),
+        ])
+        result = self.query(iq)
+        found: Dict[str, dict] = {}
+        list_node = get_child(get_child(result, "usync"), "list")
+        for user_node in get_children(list_node, "user"):
+            contact = get_child(user_node, "contact")
+            phone = (user_node.attrs.get("jid") or "").split("@")[0]
+            exists = contact is not None and contact.attrs.get("type") == "in"
+            found[phone] = {
+                "exists": exists,
+                "jid": user_node.attrs.get("jid"),
+                "lid": user_node.attrs.get("lid"),
+            }
+        return found
+
+    def profile_picture_url(self, jid: str, kind: str = "image") -> Optional[str]:
+        """Return the profile picture URL of a contact or group (may be empty)."""
+        node = Node("iq", {"target": jid_normalized(jid) or jid, "to": S_WHATSAPP_NET,
+                           "type": "get", "xmlns": "w:profile:picture"},
+                    [Node("picture", {"type": kind})])
+        result = self.query(node)
+        picture = get_child(result, "picture")
+        if picture is None:
+            return None
+        return picture.attrs.get("url") or (picture.text() or None)
+
+    def block_contact(self, jid: str, action: str = "block") -> None:
+        """Block or unblock a contact."""
+        lid = self.store.lid_for(jid_normalized(jid)) or jid_normalized(jid)
+        attrs = {"action": action, "jid": lid}
+        if action == "block":
+            attrs["pn_jid"] = jid_normalized(jid)
+        node = Node("iq", {"xmlns": "blocklist", "to": S_WHATSAPP_NET, "type": "set"},
+                    [Node("item", attrs)])
+        self.query(node)
+
     # --------------------------------------------------------------- sessions
     def _new_session(self) -> dict:
         return sig.new_session_state(self.store.registration_id(),
@@ -1134,6 +1189,90 @@ class WAClient:
     def send_text(self, jid: str, text: str, message_id: Optional[str] = None, **kwargs) -> str:
         return self.send_message(jid, {"conversation": text}, message_id=message_id, **kwargs)
 
+    # ------------------------------------------------------------- media send
+    def _media_message(self, media_type: str, data: bytes, mimetype: str,
+                       caption: Optional[str] = None, mentioned: Optional[List[str]] = None,
+                       quoted: Optional[dict] = None, **extra) -> dict:
+        uploaded = self.upload_media(data, media_type, mimetype)
+        uploaded["mimetype"] = mimetype
+        body = {key: value for key, value in uploaded.items() if value is not None}
+        body.update(extra)
+        if caption:
+            body["caption"] = caption
+        context = self._context_info(quoted, mentioned)
+        if context:
+            body["contextInfo"] = context
+        field = {
+            "image": "imageMessage",
+            "video": "videoMessage",
+            "audio": "audioMessage",
+            "document": "documentMessage",
+            "sticker": "stickerMessage",
+        }[media_type]
+        return {field: body}
+
+    def _context_info(self, quoted: Optional[dict], mentioned: Optional[List[str]] = None):
+        context = {}
+        if quoted:
+            context["stanzaId"] = quoted["key"]["id"]
+            context["participant"] = quoted["key"].get("participant") or quoted["key"]["remoteJid"]
+            context["quotedMessage"] = quoted.get("message") or {}
+        if mentioned:
+            context["mentionedJid"] = list(mentioned)
+        return context or None
+
+    def send_image(self, jid: str, data: bytes, mimetype: str = "image/jpeg",
+                   caption: Optional[str] = None, mentioned: Optional[List[str]] = None,
+                   quoted: Optional[dict] = None, **kwargs) -> str:
+        message = self._media_message("image", data, mimetype, caption, mentioned, quoted)
+        return self.send_message(jid, message, **kwargs)
+
+    def send_video(self, jid: str, data: bytes, mimetype: str = "video/mp4",
+                   caption: Optional[str] = None, gif_playback: bool = False,
+                   seconds: int = 0, mentioned: Optional[List[str]] = None,
+                   quoted: Optional[dict] = None, **kwargs) -> str:
+        message = self._media_message("video", data, mimetype, caption, mentioned, quoted,
+                                      gifPlayback=gif_playback or None,
+                                      seconds=seconds or None)
+        return self.send_message(jid, message, **kwargs)
+
+    def send_audio(self, jid: str, data: bytes, mimetype: str = "audio/ogg",
+                   ptt: bool = False, seconds: int = 0, quoted: Optional[dict] = None,
+                   **kwargs) -> str:
+        message = self._media_message("audio", data, mimetype, None, None, quoted,
+                                      ptt=ptt or None, seconds=seconds or None)
+        return self.send_message(jid, message, **kwargs)
+
+    def send_document(self, jid: str, data: bytes, filename: str,
+                      mimetype: Optional[str] = None, caption: Optional[str] = None,
+                      quoted: Optional[dict] = None, **kwargs) -> str:
+        extension = filename.rsplit(".", 1)[-1] if "." in filename else ""
+        message = self._media_message("document", data, mimetype or mimetype_for(extension),
+                                      caption, None, quoted, fileName=filename, title=filename)
+        return self.send_message(jid, message, **kwargs)
+
+    def send_sticker(self, jid: str, data: bytes, quoted: Optional[dict] = None,
+                     **kwargs) -> str:
+        # a WhatsApp sticker is a 512x512 webp image
+        message = self._media_message("sticker", data, "image/webp", None, None, quoted)
+        return self.send_message(jid, message, **kwargs)
+
+    def send_reaction(self, chat_jid: str, key: dict, emoji: str,
+                      from_me: bool = False) -> str:
+        message = {
+            "reactionMessage": {
+                "key": {
+                    "remoteJid": chat_jid,
+                    "fromMe": from_me,
+                    "id": key.get("id"),
+                    "participant": key.get("participant"),
+                },
+                "text": emoji,
+                "groupingKey": key.get("id"),
+            },
+        }
+        return self.send_message(chat_jid, message, additional_attributes={"decrypt-fail": "hide"})
+
     def reply_text(self, chat_jid: str, quoted: dict, text: str, **kwargs) -> str:
         """Reply to a message (``quoted`` is a decrypted message dict)."""
         stanza_id = quoted["key"]["id"]
@@ -1211,6 +1350,9 @@ class WAClient:
             self.emit("decrypt_failed", info)
             return
         info["message"] = message
+        chat = info["key"].get("remoteJid")
+        if chat:
+            self.known_chats.add(chat)
         if not info["key"]["fromMe"]:
             chat = info["key"]["remoteJid"]
             participant = info["key"].get("participant")
