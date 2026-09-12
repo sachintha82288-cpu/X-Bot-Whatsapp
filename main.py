@@ -21,7 +21,7 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from xbot.bot.qr import encode_qr  # noqa: E402
+from xbot.bot.qr import encode_qr, render_qr, render_qr_plain  # noqa: E402
 from xbot.bot.runtime import Bot, Config  # noqa: E402
 from xbot.client import Logger, WAClient  # noqa: E402
 from xbot.store import AuthStore  # noqa: E402
@@ -45,17 +45,13 @@ def print_qr(text: str) -> None:
         print("→ could not draw the QR code (%s)" % exc)
         print("  use: python main.py --pairing-code <your number>")
         return
-    quiet = 2
-    size = len(matrix)
-    print("█" * ((size + quiet * 2) * 2))
-    for row in range(-quiet, size + quiet):
-        line = ""
-        for column in range(-quiet, size + quiet):
-            inside = 0 <= row < size and 0 <= column < size
-            line += "██" if (inside and matrix[row][column]) else "  "
-        print(line)
-    print("█" * ((size + quiet * 2) * 2))
-    print("scan this with WhatsApp ▸ Linked devices")
+    print()
+    if sys.stdout.isatty():
+        print(render_qr(matrix))
+    else:  # eg. output is piped to a file: keep it plain ASCII
+        print(render_qr_plain(matrix))
+    print("scan this with WhatsApp ▸ Linked devices ▸ Link a device")
+    print()
 
 
 def build_bot(args) -> tuple:

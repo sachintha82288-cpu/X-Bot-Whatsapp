@@ -349,4 +349,55 @@ def encode_qr(text: str) -> List[List[bool]]:
     return best.modules
 
 
-__all__ = ["encode_qr"]
+DARK_ON_LIGHT = "\x1b[30m\x1b[47m"   # black foreground, white background
+LIGHT_ON_DARK = "\x1b[37m\x1b[40m"   # white foreground, black background
+BLACK_BG = "\x1b[30m\x1b[40m"        # both halves dark
+WHITE_BG = "\x1b[37m\x1b[47m"        # both halves light
+RESET = "\x1b[0m"
+
+
+def render_qr(matrix, quiet: int = 4) -> str:
+    """Render a QR matrix as ANSI coloured half blocks.
+
+    Every character cell holds one module wide and two modules tall, which
+    matches the ~1:2 aspect ratio of a terminal cell, so the code stays
+    square *and* narrow enough for a phone terminal (no need to zoom out).
+    Dark modules are drawn black on white -- the orientation every scanner
+    expects -- whatever colour scheme the terminal uses.
+    """
+    size = len(matrix)
+
+    def dark(row: int, column: int) -> bool:
+        return 0 <= row < size and 0 <= column < size and matrix[row][column]
+
+    lines = []
+    for row in range(-quiet, size + quiet, 2):
+        parts = []
+        for column in range(-quiet, size + quiet):
+            top, bottom = dark(row, column), dark(row + 1, column)
+            if top and bottom:
+                parts.append(BLACK_BG + " ")
+            elif not top and not bottom:
+                parts.append(WHITE_BG + " ")
+            elif top:
+                parts.append(DARK_ON_LIGHT + "\u2580")   # upper half dark
+            else:
+                parts.append(LIGHT_ON_DARK + "\u2580")   # upper half light
+        lines.append("".join(parts) + RESET)
+    return "\n".join(lines)
+
+
+def render_qr_plain(matrix, quiet: int = 2) -> str:
+    """Fallback for dumb terminals / redirected output (no escape codes)."""
+    size = len(matrix)
+    lines = []
+    for row in range(-quiet, size + quiet):
+        line = ""
+        for column in range(-quiet, size + quiet):
+            inside = 0 <= row < size and 0 <= column < size
+            line += "\u2588\u2588" if inside and matrix[row][column] else "  "
+        lines.append(line)
+    return "\n".join(lines)
+
+
+__all__ = ["encode_qr", "render_qr", "render_qr_plain"]

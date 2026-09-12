@@ -85,6 +85,15 @@ def on_call(func: Callable) -> Callable:
     return func
 
 
+def reset() -> None:
+    """Forget every command and hook (used before reloading the plugins)."""
+    COMMANDS.clear()
+    del _message_hooks[:]
+    del _join_hooks[:]
+    del _leave_hooks[:]
+    del _call_hooks[:]
+
+
 def message_hooks() -> List[Callable]:
     return list(_message_hooks)
 
@@ -127,6 +136,6 @@ def all_commands() -> List[Command]:
 
 __all__ = [
     "COMMANDS", "Command", "command", "on_message", "on_join", "on_leave", "on_call",
-    "parse_command", "all_commands", "message_hooks", "join_hooks", "leave_hooks",
+    "parse_command", "all_commands", "reset", "message_hooks", "join_hooks", "leave_hooks",
     "call_hooks",
 ]

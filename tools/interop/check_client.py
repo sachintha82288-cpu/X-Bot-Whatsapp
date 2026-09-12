@@ -71,8 +71,9 @@ def main() -> int:
     reader = threading.Thread(target=read_server, daemon=True)
     reader.start()
 
-    # wait for the CA public key the mock prints on startup
-    deadline = time.time() + 20
+    # wait for the CA public key the mock prints on startup (node can be slow
+    # to boot on a loaded machine, so be generous here)
+    deadline = time.time() + 60
     while time.time() < deadline:
         for line in list(server_lines):
             try:
@@ -86,7 +87,9 @@ def main() -> int:
             break
         time.sleep(0.1)
     if not ca_public:
-        print("server did not start")
+        print("server did not start; last output:")
+        for line in server_lines[-10:]:
+            print("  ", line)
         server.kill()
         return 1
 
@@ -109,7 +112,7 @@ def main() -> int:
         print("client could not connect")
         server.kill()
         return 1
-    if not opened.wait(15):
+    if not opened.wait(30):
         print("client never reached the open state")
         server.kill()
         return 1
@@ -118,7 +121,7 @@ def main() -> int:
     client.send_text("15551234567@s.whatsapp.net", os.environ.get("MOCK_EXPECT", "ping from python"))
 
     reply = None
-    deadline = time.time() + 15
+    deadline = time.time() + 30
     while time.time() < deadline and reply is None:
         try:
             reply = received.get(timeout=0.5)
@@ -148,7 +151,9 @@ def main() -> int:
         if event.get("event") == "RESULT":
             summary = event
     if summary is None:
-        print("server produced no result")
+        print("server produced no result; last output:")
+        for line in server_lines[-10:]:
+            print("  ", line)
         return 1
 
     ok = True

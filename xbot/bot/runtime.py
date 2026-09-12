@@ -6,6 +6,7 @@ import importlib
 import json
 import os
 import pkgutil
+import sys
 import threading
 import time
 import traceback
@@ -159,7 +160,14 @@ class Bot:
         for name, module_name in modules:
             try:
                 if module_name:
-                    importlib.import_module(module_name)
+                    # reload() re-runs the decorators, a plain import of an
+                    # already imported module is a no-op (so .reload would lose
+                    # every built-in command)
+                    loaded = sys.modules.get(module_name)
+                    if loaded is not None:
+                        importlib.reload(loaded)
+                    else:
+                        importlib.import_module(module_name)
                 else:
                     spec = importlib.util.spec_from_file_location(f"xbot_plugin_{name}", name)
                     module = importlib.util.module_from_spec(spec)
@@ -177,7 +185,7 @@ class Bot:
         return plugin_api.all_commands()
 
     def reload_plugins(self) -> None:
-        plugin_api.COMMANDS.clear()
+        plugin_api.reset()
         self.loaded_plugins = []
         self.load_plugins()
 
@@ -238,6 +246,10 @@ class Bot:
             try:
                 with self._message_lock:
                     handled_result = entry.func(self, message, args)
+                # a handler that *returns* text instead of calling reply() still works
+                if isinstance(handled_result, str) and handled_result.strip():
+                    message.reply(handled_result)
+                    handled_result = None
             except Exception as exc:
                 self.log.error("command .%s failed: %s", entry.name, exc)
                 self.log.debug("%s", traceback.format_exc())
@@ -250,7 +262,9 @@ class Bot:
         for hook in plugin_api.message_hooks():
             try:
                 with self._message_lock:
-                    hook(self, message)
+                    hooked_result = hook(self, message)
+                if isinstance(hooked_result, str) and hooked_result.strip():
+                    message.reply(hooked_result)
             except Exception as exc:  # pragma: no cover
                 self.log.error("message hook %s failed: %s", getattr(hook, "__name__", "?"), exc)
         return handled_result

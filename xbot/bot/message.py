@@ -170,15 +170,15 @@ class Message:
         return None
 
     # ------------------------------------------------------------------ output
-    def reply(self, text: str, **kwargs) -> Optional[str]:
-        if self.client is None:
-            return None
-        return self.client.reply_text(self.chat, self.raw, text, **kwargs)
+    def reply(self, text: str, **kwargs) -> None:
+        """Send ``text`` quoting this message (fire and forget)."""
+        if self.client is not None:
+            self.client.reply_text(self.chat, self.raw, text, **kwargs)
 
-    def send(self, text: str, **kwargs) -> Optional[str]:
-        if self.client is None:
-            return None
-        return self.client.send_text(self.chat, text, **kwargs)
+    def send(self, text: str, **kwargs) -> None:
+        """Send ``text`` to the same chat without quoting (fire and forget)."""
+        if self.client is not None:
+            self.client.send_text(self.chat, text, **kwargs)
 
     def react(self, emoji: str) -> None:
         if self.client is not None:

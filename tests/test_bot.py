@@ -4,12 +4,14 @@
 from __future__ import annotations
 
 import os
+import re
 import sys
 import tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
+from xbot.bot import plugin as _plugin  # noqa: E402
 from xbot.bot.message import Message  # noqa: E402
 from xbot.bot.runtime import Bot, Config  # noqa: E402
 
@@ -264,6 +266,34 @@ def main() -> int:
     bot.handle_message(text_message(client, ".ping"))
     check("disabled command is ignored", client.sent == [])
     config.set("disabled", [])
+
+    # --- user plugin folder -------------------------------------------------
+    bot.plugin_dirs = [os.path.join(ROOT, "plugins")]
+    bot.reload_plugins()
+    check("example plugin loaded", "example.py" in bot.loaded_plugins)
+    client.sent.clear()
+    bot.handle_message(text_message(client, ".hello world"))
+    check("example plugin command works", "hello world" in str(client.sent))
+
+    client.sent.clear()
+    bot.handle_message(text_message(client, ".ping"))
+    check("built-in commands survive a plugin reload", client.sent != [])
+    check("hooks are not duplicated by a reload",
+          len([hook for hook in _plugin.message_hooks()
+               if getattr(hook, "__name__", "") == "_afk_notice"]) == 1)
+
+    # --- terminal QR rendering ----------------------------------------------
+    from xbot.bot.qr import encode_qr, render_qr, render_qr_plain
+
+    matrix = encode_qr("https://wa.me/settings/linked_devices#test")
+    ansi_lines = render_qr(matrix).splitlines()
+    visible = [re.sub("\x1b\\[[0-9;]*m", "", line) for line in ansi_lines]
+    check("ansi qr is two module rows per terminal line",
+          len(ansi_lines) == (len(matrix) + 8 + 1) // 2)
+    check("ansi qr is one character per module wide",
+          {len(line) for line in visible} == {len(matrix) + 8})
+    check("plain qr renders every quiet zone row",
+          len(render_qr_plain(matrix).splitlines()) == len(matrix) + 4)
 
     print(f"\n{len(PASSED)} passed, {len(FAILED)} failed")
     if FAILED:
