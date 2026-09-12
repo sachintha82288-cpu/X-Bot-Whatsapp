@@ -1,0 +1,17 @@
+# Python bytecode
+__pycache__/
+*.py[cod]
+
+# Bot runtime data (session + settings are per user / per phone)
+session/
+*.session.json
+
+# Node helpers (only used by the optional interop checks)
+node_modules
+tools/interop/node_modules
+
+# Local scratch
+.env
+*.log
+.venv/
+venv/
