@@ -1,0 +1,10 @@
+{
+  "name": "wamock",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "dependencies": {
+    "baileys": "^7.0.0-rc14",
+    "ws": "^8.21.3"
+  }
+}
