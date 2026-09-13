@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-label="Plugin system">
+  <rect width="64" height="64" rx="16" fill="#0E1A2A"/>
+  <rect x="1" y="1" width="62" height="62" rx="15" fill="none" stroke="#2A3A55" stroke-width="1"/>
+  <path d="M20 28h8v-4a4 4 0 0 1 8 0v4h8v8h4a4 4 0 0 1 0 8h-4v8H20V44h-4a4 4 0 0 1 0-8h4v-8z" fill="none" stroke="#3DDC97" stroke-width="2.5" stroke-linejoin="round"/>
+  <circle cx="32" cy="36" r="3" fill="#5B9BD5"/>
+</svg>

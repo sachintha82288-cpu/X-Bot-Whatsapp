@@ -256,7 +256,19 @@ def hkdf_sha256(ikm: BytesLike, length: int, salt: bytes = b"", info: BytesLike 
 
 
 def pbkdf2_sha256(password: BytesLike, salt: BytesLike, iterations: int, length: int) -> bytes:
+    """PBKDF2-HMAC-SHA256.
+
+    Pairing codes need 131072 iterations — the pure-Python loop takes about a
+    minute on CPython, so we prefer the stdlib ``hashlib.pbkdf2_hmac`` (still
+    no third-party package) and only fall back to the hand-rolled version.
+    """
     password, salt = bytes(password), bytes(salt)
+    try:
+        import hashlib
+
+        return hashlib.pbkdf2_hmac("sha256", password, salt, iterations, dklen=length)
+    except Exception:  # pragma: no cover - exotic interpreters
+        pass
     blocks = (length + 31) // 32
     out = b""
     for i in range(1, blocks + 1):
@@ -274,21 +286,31 @@ def pbkdf2_sha256(password: BytesLike, salt: BytesLike, iterations: int, length:
 # Optional stdlib acceleration
 # --------------------------------------------------------------------------
 
-_PREFER_STDLIB = False
+_PREFER_STDLIB = True  # default on — phones need the speed; pure impl still available
 _HASHLIB = None
+_HMAC = None
 
 
 def set_prefer_stdlib(enabled: bool) -> None:
     """Use hashlib/hmac (stdlib) for the hash primitives when available."""
-    global _PREFER_STDLIB, _HASHLIB
+    global _PREFER_STDLIB, _HASHLIB, _HMAC
     _PREFER_STDLIB = bool(enabled)
-    if _PREFER_STDLIB and _HASHLIB is None:
+    _HASHLIB = None
+    _HMAC = None
+    if _PREFER_STDLIB:
         try:  # pragma: no cover - depends on interpreter
             import hashlib  # type: ignore
+            import hmac as _hmac_mod  # type: ignore
 
             _HASHLIB = hashlib
+            _HMAC = _hmac_mod
         except Exception:  # pragma: no cover
             _HASHLIB = False
+            _HMAC = False
+
+
+# Enable stdlib hashes on import (pairing + Noise stay responsive on Termux).
+set_prefer_stdlib(True)
 
 
 def fast_sha256(data: BytesLike) -> bytes:
@@ -304,14 +326,14 @@ def fast_sha512(data: BytesLike) -> bytes:
 
 
 def fast_hmac_sha256(key: BytesLike, message: BytesLike) -> bytes:
-    if _HASHLIB:
-        return _HASHLIB.new("sha256", bytes(message), bytes(key)).digest()
+    if _HMAC:
+        return _HMAC.new(bytes(key), bytes(message), _HASHLIB.sha256).digest()
     return hmac_sha256(key, message)
 
 
 def fast_hmac_sha512(key: BytesLike, message: BytesLike) -> bytes:
-    if _HASHLIB:
-        return _HASHLIB.new("sha512", bytes(message), bytes(key)).digest()
+    if _HMAC:
+        return _HMAC.new(bytes(key), bytes(message), _HASHLIB.sha512).digest()
     return hmac_sha512(key, message)
 
 
