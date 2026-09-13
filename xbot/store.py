@@ -174,7 +174,15 @@ class AuthStore:
         return me.get("lid")
 
     def is_registered(self) -> bool:
-        return bool(self.me_id)
+        """True only after a completed pair-success (account + me jid).
+
+        ``request_pairing_code`` temporarily stores ``me`` with the phone
+        number so the pairing IQ has a jid — that must *not* count as a
+        finished registration, or the next reconnect would try to log in
+        with a half-baked session instead of sending the registration
+        payload again.
+        """
+        return bool(self.me_id and self.creds.get("account"))
 
     def identity_key_pair(self) -> dict:
         return self.creds["signedIdentityKey"]

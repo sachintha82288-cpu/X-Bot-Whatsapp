@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib
+import importlib.util
 import json
 import os
 import pkgutil
@@ -139,10 +140,12 @@ class Bot:
         number = decoded[0] if decoded else ""
         if not number:
             return False
+        # Strip the device part if a full device jid leaked in (user:device).
+        number = number.split(":")[0]
         owners = [str(self.config.get("owner") or "").lstrip("+")]
         owners += [str(item).lstrip("+") for item in self.config.get("owners") or []]
         if self.me_number:
-            owners.append(self.me_number)
+            owners.append(self.me_number.split(":")[0])
         return number in {owner for owner in owners if owner}
 
     def is_self_mode(self) -> bool:
@@ -218,7 +221,15 @@ class Bot:
         """Run the message through the plugin pipeline (blocking)."""
         if not self._accept(message):
             return None
-        if self.is_self_mode() and not self.is_owner(message.sender):
+
+        # Messages the primary phone sends show up as fromMe on the companion.
+        # Treat the linked account itself as the sender in that case so owner
+        # checks and self-mode still work when you command the bot from your phone.
+        effective_sender = message.sender
+        if message.from_me and self.me:
+            effective_sender = self.me
+
+        if self.is_self_mode() and not self.is_owner(effective_sender):
             return None
 
         parsed = plugin_api.parse_command(message.text, self.prefix)
@@ -232,13 +243,14 @@ class Bot:
                 return None
             if name in disabled or entry.name in disabled:
                 return None
-            if entry.owner_only and not self.is_owner(message.sender):
+            if entry.owner_only and not self.is_owner(effective_sender):
                 message.reply("⛔ this command is for the owner only")
                 return None
             if entry.group_only and not message.is_group:
                 message.reply("⛔ this command only works in groups")
                 return None
-            if entry.admin_only and message.is_group and not self.is_admin(message.chat, message.sender):
+            if entry.admin_only and message.is_group and not (
+                    self.is_admin(message.chat, effective_sender) or self.is_owner(effective_sender)):
                 message.reply("⛔ you need to be a group admin to do that")
                 return None
 
@@ -259,21 +271,31 @@ class Bot:
                     pass
                 return None
 
-        for hook in plugin_api.message_hooks():
-            try:
-                with self._message_lock:
-                    hooked_result = hook(self, message)
-                if isinstance(hooked_result, str) and hooked_result.strip():
-                    message.reply(hooked_result)
-            except Exception as exc:  # pragma: no cover
-                self.log.error("message hook %s failed: %s", getattr(hook, "__name__", "?"), exc)
+        # Skip automated hooks (antilink, afk, …) for our own echoes so we
+        # don't kick/react to ourselves.
+        if not message.from_me:
+            for hook in plugin_api.message_hooks():
+                try:
+                    with self._message_lock:
+                        hooked_result = hook(self, message)
+                    if isinstance(hooked_result, str) and hooked_result.strip():
+                        message.reply(hooked_result)
+                except Exception as exc:  # pragma: no cover
+                    self.log.error("message hook %s failed: %s", getattr(hook, "__name__", "?"), exc)
         return handled_result
 
     def _accept(self, message: Message) -> bool:
+        if message.is_status:
+            return False
         if not message.text and message.media_type is None and not message.body:
             return False
+        # Own echoes are only useful when they carry a command (owner controlling
+        # the bot from the primary phone). Everything else from us is ignored.
         if message.from_me:
-            return False
+            text = (message.text or "").strip()
+            prefix = self.prefix or "."
+            if not text or not text[0:1] or text[0] not in prefix:
+                return False
         return True
 
     def dispatch_async(self, message: Message) -> None:

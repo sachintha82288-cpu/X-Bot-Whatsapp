@@ -1,204 +1,322 @@
-# X-Bot-Whatsapp
+<p align="center">
+  <img src="docs/assets/banner.svg" alt="X-Bot WhatsApp — pure Python multi-device client" width="100%">
+</p>
 
-A WhatsApp bot written in **pure Python** — every layer of the stack (X25519/Ed25519
-crypto, SHA/AES-GCM, HKDF, the Noise handshake, the binary node codec, protobuf,
-the Signal double ratchet, WebSocket, HTTP and the pairing QR encoder) is
-implemented inside this repository. **No third party Python packages are used**,
-not even `requests`, `websockets`, `cryptography` or `qrcode`.
+<p align="center">
+  <a href="#quick-start"><img src="https://img.shields.io/badge/quick%20start-python%20main.py-25D366?style=for-the-badge&labelColor=0B1220" alt="Quick start"></a>
+  <a href="#architecture"><img src="https://img.shields.io/badge/deps-stdlib%20only-3DDC97?style=for-the-badge&labelColor=0B1220" alt="stdlib only"></a>
+  <a href="#tests"><img src="https://img.shields.io/badge/tests-offline%20interop-5B9BD5?style=for-the-badge&labelColor=0B1220" alt="Tests"></a>
+  <a href="#limitations--safety"><img src="https://img.shields.io/badge/platform-Termux%20%7C%20Linux-7C8AA5?style=for-the-badge&labelColor=0B1220" alt="Platform"></a>
+</p>
 
-It is built to run on a cheap Android phone: Termux + Python 3, no background
-services other than the bot itself, and the whole client loads in roughly 17 MB
-of RSS on CPython 3.11 (measured on this checkout) - comfortable on a 1 GB
-phone.
-
-```
-pkg install python
-git clone https://github.com/sachintha82288-cpu/X-Bot-Whatsapp
-cd X-Bot-Whatsapp
-python main.py
-```
-
-> 🇱🇰 **සිංහලෙන් කෙටියෙන්:** Termux එකේ `pkg install python` කරලා, ඔබේ WhatsApp
-> අංකයෙන් `python main.py --pairing-code 94XXXXXXXXX` ලෙස run කරන්න. Terminal
-> එකේ පෙන්වන අට අකුරු කේතය WhatsApp ▸ Linked devices ▸ Link with phone number
-> එකට ඇතුළත් කරන්න. (QR එකකින් link කරන්නත් පුළුවන් — `python main.py`.)
+<p align="center">
+  <b>X-Bot</b> is a WhatsApp multi-device companion written entirely in pure Python.<br>
+  Crypto, Noise, WABinary, protobuf, Signal, WebSocket, HTTP, and QR encoding ship inside this tree.<br>
+  <code>pip install</code> is not required — not even for <code>requests</code>, <code>websockets</code>, <code>cryptography</code>, or <code>qrcode</code>.
+</p>
 
 ---
 
 ## Contents
 
-- [Quick start](#quick-start)
-- [Commands](#commands)
-- [Configuration](#configuration)
-- [Downloaders](#downloaders)
-- [Your own plugins](#your-own-plugins)
-- [How it works](#how-it-works)
-- [Tests](#tests)
-- [Limitations and safety](#limitations-and-safety)
+| | |
+| :--- | :--- |
+| [Highlights](#highlights) | What makes this stack different |
+| [Quick start](#quick-start) | Install, link, go online |
+| [Linking guide](#linking-guide) | Pairing code and QR flows |
+| [Runtime](#runtime) | Background mode and CLI flags |
+| [Command reference](#command-reference) | Full bot surface |
+| [Configuration](#configuration) | `config.json` and group state |
+| [Downloaders](#downloaders) | Media extractor endpoints |
+| [Plugin SDK](#plugin-sdk) | Write your own commands |
+| [Architecture](#architecture) | Protocol layers and modules |
+| [Tests](#tests) | Unit and interop suites |
+| [Limitations and safety](#limitations--safety) | Scope, risk, ops notes |
+| [Sinhala summary](#sinhala-summary) | Short local-language guide |
+
+---
+
+## Highlights
+
+<table>
+  <tr>
+    <td width="25%" align="center">
+      <img src="docs/assets/icon-python.svg" width="48" alt="Pure Python"><br>
+      <b>Zero pip deps</b><br>
+      <sub>CPython 3.9+ stdlib only</sub>
+    </td>
+    <td width="25%" align="center">
+      <img src="docs/assets/icon-lock.svg" width="48" alt="E2E"><br>
+      <b>Real E2E stack</b><br>
+      <sub>Noise XX + Signal ratchet</sub>
+    </td>
+    <td width="25%" align="center">
+      <img src="docs/assets/icon-phone.svg" width="48" alt="Termux"><br>
+      <b>Phone-first</b><br>
+      <sub>~17 MB RSS on 3.11</sub>
+    </td>
+    <td width="25%" align="center">
+      <img src="docs/assets/icon-plugin.svg" width="48" alt="Plugins"><br>
+      <b>Hot plugins</b><br>
+      <sub>Drop-in <code>plugins/*.py</code></sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="25%" align="center">
+      <img src="docs/assets/icon-group.svg" width="48" alt="Groups"><br>
+      <b>Group ops</b><br>
+      <sub>Kick, promote, antilink</sub>
+    </td>
+    <td width="25%" align="center">
+      <img src="docs/assets/icon-media.svg" width="48" alt="Media"><br>
+      <b>Media path</b><br>
+      <sub>CDN encrypt / download</sub>
+    </td>
+    <td width="25%" align="center">
+      <img src="docs/assets/icon-test.svg" width="48" alt="Tests"><br>
+      <b>Interop checks</b><br>
+      <sub>Baileys · libsignal · jsQR</sub>
+    </td>
+    <td width="25%" align="center">
+      <img src="docs/assets/icon-shield.svg" width="48" alt="Safety"><br>
+      <b>Session isolation</b><br>
+      <sub>Local JSON, never commit</sub>
+    </td>
+  </tr>
+</table>
+
+```text
+  stack snapshot
+  ─────────────────────────────────────────────────────────────
+  transport   wss://web.whatsapp.com/ws/chat   (RFC 6455)
+  handshake   Noise_XX_25519_AESGCM_SHA256
+  framing     WABinary nodes  ·  protobuf Message
+  e2e         X3DH · double ratchet · sender keys (skmsg)
+  media       HKDF media keys · AES-CBC · HMAC-SHA256 MAC
+  pairing     8-char link code  or  terminal QR (byte mode L)
+  ─────────────────────────────────────────────────────────────
+```
+
+---
 
 ## Quick start
 
-### 1. Install Termux and Python
+### Requirements
+
+| Item | Notes |
+| --- | --- |
+| Python | **3.9+** (Termux current builds are fine) |
+| Network | Outbound HTTPS / WSS to WhatsApp |
+| Optional | `ffmpeg` for sticker / toimg / toaudio |
+
+### Install
 
 ```bash
+# Termux
 pkg update && pkg upgrade
-pkg install python            # required
-pkg install ffmpeg            # optional: only sticker / toimg / toaudio need it
-```
+pkg install python
+pkg install ffmpeg          # optional media conversion
 
-Python 3.9 or newer is required (anything Termux ships today is fine).
-
-### 2. Get the code
-
-```bash
+# Any Linux / macOS with Python 3.9+
 git clone https://github.com/sachintha82288-cpu/X-Bot-Whatsapp
 cd X-Bot-Whatsapp
+python main.py              # interactive setup wizard
 ```
 
-There is nothing to `pip install` — the bot imports only the standard library.
+There is nothing to install from PyPI. The process imports only the standard library.
 
-### 3. Link the bot to your WhatsApp account
-
-**Option A — pairing code (recommended on a phone):**
-
-```bash
-python main.py --pairing-code 94771234567
-```
-
-The bot prints an 8 character code. On the phone that *owns* the WhatsApp
-account: **Settings ▸ Linked devices ▸ Link a device ▸ Link with phone number
-instead** and type the code.
-
-**Option B — QR code:**
+### First link (60 seconds)
 
 ```bash
 python main.py
 ```
 
-A QR code is drawn right in the terminal (half blocks + colours, so it is
-square and narrow enough for a phone screen). Scan it with **WhatsApp ▸
-Linked devices ▸ Link a device**.
-
-Either way the session is stored in `./session/session.json`. **That file *is*
-your login** — anyone who copies it can control your WhatsApp. Never commit it
-(the bundled `.gitignore` already excludes it) and never share it.
-
-### 4. Run it in the background (optional)
-
-```bash
-termux-wake-lock                     # stop Android from freezing Termux
-nohup python main.py > bot.log 2>&1 &   # survives the terminal closing
-tail -f bot.log                      # watch the log
+```text
+  How do you want to link?
+    1)  Phone number  →  8-character code   (recommended on Termux)
+    2)  QR code       →  scan with camera
 ```
 
-`pkg install tmux` and running the bot inside a tmux session is the friendlier
-alternative.
+1. Choose **1** and enter the account number with country code (`94771234567` or local `0771234567`).
+2. Type the on-screen code into **WhatsApp → Linked devices → Link with phone number**.
+3. Wait for the **ONLINE** banner, then send `.ping` in any chat.
 
-### Command line flags
+Session material is written to `./session/session.json`. The next launch logs in without pairing again.
 
-| flag | meaning |
+> **Security:** `session/session.json` *is* the login. Anyone with a copy can act as this linked device. It is gitignored — never commit or share it.
+
+---
+
+## Linking guide
+
+<p align="center">
+  <img src="docs/assets/flow-pairing.svg" alt="Pairing flow: wizard → number → code → phone confirm → online" width="100%">
+</p>
+
+### Pairing code (CLI)
+
+```bash
+python main.py --pairing-code 94771234567
+python main.py --pairing-code 0771234567      # Sri Lanka local form is accepted
+```
+
+| Detail | Value |
 | --- | --- |
-| `--pairing-code <number>` | link with an 8 character code instead of a QR code (number with country code, no `+`) |
-| `--session <dir>` | where to keep `session.json`, `config.json` and `data/` (default `./session`) |
-| `--config <file>` | use a specific `config.json` |
-| `--owner <number>` | phone number that counts as the owner (only this number may use owner commands) |
-| `--prefix <.>` | command prefix, default `.` |
-| `--name <text>` | bot display name used in messages |
-| `--self` | self mode: only the owner may use commands |
-| `--debug` | verbose logging |
-| `--no-banner` | do not print the ASCII banner |
+| Code shape | 8 Crockford characters, shown as `ABCD-EFGH` |
+| Validity | Roughly one minute; the bot refreshes on timeout |
+| Phone path | Settings → Linked devices → Link a device → Link with phone number |
 
-Owner phone numbers must be entered without `+` and without spaces, e.g.
-`94771234567` or `15550001111`.
+### QR code
 
-If the connection drops the bot reconnects by itself (exponential backoff,
-`auto_reconnect` in `config.json`).
+```bash
+python main.py --qr
+```
 
-## Commands
+The terminal renderer packs two module rows per character cell (half-blocks + ANSI colour) so the symbol stays square on narrow phone screens. A plain ASCII fallback is used when stdout is not a TTY.
 
-Default prefix is `.` — so `.menu`, `.ping`, `.sticker`, …
+### After a successful link
+
+| Event | What you see |
+| --- | --- |
+| Pair-success | Account JID saved; connection recycled by WhatsApp |
+| Open | Presence published; owner inferred from the linked number if unset |
+| Ready | Commands such as `.ping`, `.menu`, `.alive` respond in chat |
+
+---
+
+## Runtime
+
+### Foreground
+
+```bash
+python main.py
+python main.py --self --owner 94771234567
+python main.py --debug
+```
+
+### Background on Termux
+
+```bash
+termux-wake-lock
+nohup python main.py > bot.log 2>&1 &
+tail -f bot.log
+```
+
+Prefer `tmux` or `screen` when you want an attachable session:
+
+```bash
+pkg install tmux
+tmux new -s xbot
+python main.py
+# detach: Ctrl+B then D
+```
+
+### Command-line interface
+
+| Flag | Purpose |
+| --- | --- |
+| `--pairing-code <number>` | Link with country-code number (e.g. `94771234567`) |
+| `--qr` | Force QR linking; skip the wizard menu |
+| `--session <dir>` | Session root (`session.json`, `config.json`, `data/`) |
+| `--config <file>` | Alternate config path |
+| `--owner <number>` | Primary owner (digits only) |
+| `--prefix <char>` | Command prefix (default `.`) |
+| `--name <text>` | Display name / push name |
+| `--self` | Self mode: only the owner may run commands |
+| `--debug` | Verbose protocol logging |
+| `--no-banner` | Suppress the startup banner |
+
+Reconnect uses exponential backoff (`auto_reconnect` in config). Event handlers are registered once so reconnects do not stack duplicate QR / open callbacks.
+
+---
+
+## Command reference
+
+Default prefix: **`.`** — examples `.menu`, `.ping`, `.sticker`.
 
 ### Core
 
-| command | aliases | what it does |
+| Command | Aliases | Description |
 | --- | --- | --- |
-| `menu` | `help`, `list` | list every command (`.menu <cmd>` explains one) |
-| `ping` | | response time |
-| `alive` | | is the bot running (uptime, memory, host) |
-| `id` | `whoami` | your WhatsApp id / group id |
-| `owner` | | the configured owner |
-| `stats` | | messages and commands handled |
-| `del` | `delete` | delete the message you replied to |
+| `menu` | `help`, `list` | Full catalogue; `.menu <cmd>` for one entry |
+| `ping` | | Round-trip latency |
+| `alive` | | Uptime, RSS, Python, platform |
+| `id` | `whoami` | Caller JID and chat id |
+| `owner` | | Configured owner number |
+| `stats` | | Message / command counters |
+| `del` | `delete` | Revoke the replied-to message |
 
 ### Group administration
 
-| command | aliases | what it does |
-| --- | --- | --- |
-| `kick` | `remove` | remove a member (reply or @mention) |
-| `add` | | add a member by number |
-| `promote` | `admin` | make somebody an admin |
-| `demote` | `unadmin` | take admin rights away |
-| `tagall` | `everyone` | mention everybody |
-| `groupinfo` | `ginfo` | group details and member list |
-| `invite` | | group invite link |
-| `setsubject` | | rename the group |
-| `setdesc` | | change the group description |
-| `leave` | | the bot leaves the group |
-| `welcome` / `goodbye` | | set and enable the welcome / goodbye message |
-| `toggle` | `set` | turn features on/off: `welcome`, `goodbye`, `antilink` |
-| `antilink` | | delete links posted by non admins |
-| `mute` / `unmute` | `close` / `open` | only admins may talk / everybody may talk |
+Requires group admin (owner bypasses). The bot must itself be an admin for most actions.
 
-Group commands must be used by a group admin (owner commands work anywhere).
+| Command | Aliases | Description |
+| --- | --- | --- |
+| `kick` | `remove` | Remove member (reply or @mention) |
+| `add` | | Add by phone number |
+| `promote` | `admin` | Grant admin |
+| `demote` | `unadmin` | Revoke admin |
+| `tagall` | `everyone` | Mention every participant |
+| `groupinfo` | `ginfo` | Subject, size, admins |
+| `invite` | | Invite link (`new` to rotate) |
+| `setsubject` | | Rename group |
+| `setdesc` | | Set or `clear` description |
+| `leave` | | Bot leaves the group |
+| `welcome` / `goodbye` | | Template + enable |
+| `toggle` | `set` | `welcome`, `goodbye`, `antilink`, … |
+| `antilink` | | Delete non-admin links |
+| `mute` / `unmute` | `close` / `open` | Announcement mode |
 
 ### Tools
 
-| command | aliases | what it does |
+| Command | Aliases | Description |
 | --- | --- | --- |
-| `vv` | `viewonce` | re-send a view-once photo or video |
-| `sticker` | `s` | turn a photo or short video into a sticker |
-| `toimg` | `toimage` | turn a sticker back into a photo |
-| `tts` | | text to a voice note (google translate voice, no ffmpeg needed) |
-| `calc` | `math` | evaluate a maths expression |
-| `b64` / `unb64` | `base64` / `deb64` | base64 encode / decode |
-| `password` | `pw`, `genpw` | generate a strong password |
-| `time` | | current date and time |
-| `weather` | `wtr` | weather for a city |
-| `wiki` | `wikipedia` | wikipedia summary |
-| `translate` | `tr` | translate text (reply to a message or pass it inline) |
-| `short` | `shorturl` | shorten a url |
-| `whois` | | look a number up on WhatsApp |
-| `getpp` | `pp` | somebody's profile picture |
-| `afk` | | mark yourself away, tell anybody who mentions you |
-| `block` / `unblock` | | block / unblock a contact (owner) |
-| `broadcast` | | send a message to every chat the bot knows (owner) |
+| `vv` | `viewonce` | Re-send view-once media |
+| `sticker` | `s` | Image / short video → sticker (`ffmpeg`) |
+| `toimg` | `toimage` | Sticker → image |
+| `tts` | | Text → voice note |
+| `calc` | `math` | Safe arithmetic evaluator |
+| `b64` / `unb64` | `base64` / `deb64` | Encode / decode |
+| `password` | `pw`, `genpw` | Random password |
+| `time` | | Local date-time |
+| `weather` | `wtr` | City weather summary |
+| `wiki` | `wikipedia` | Wikipedia extract |
+| `translate` | `tr` | Translate (inline or reply) |
+| `short` | `shorturl` | URL shortener |
+| `whois` | | WhatsApp existence lookup |
+| `getpp` | `pp` | Profile picture |
+| `afk` | | Away marker |
+| `block` / `unblock` | | Contact block list (owner) |
+| `broadcast` | | Fan-out to known chats (owner) |
 
 ### Downloaders
 
-| command | aliases | what it does |
+| Command | Aliases | Description |
 | --- | --- | --- |
-| `dl` | `download`, `url` | download any direct media link |
-| `ytdl` | `yt`, `ytmp4`, `ytmp3` | YouTube video or audio |
-| `tiktok` | `tt`, `ttdl` | TikTok video (no watermark when the API returns one) |
+| `dl` | `download`, `url` | Direct media URL |
+| `ytdl` | `yt`, `ytmp4`, `ytmp3` | YouTube via extractor API |
+| `tiktok` | `tt`, `ttdl` | TikTok |
 | `fbdl` | `facebook` | Facebook video |
-| `igdl` | `instagram`, `ig` | Instagram post |
-| `twitter` | `twdl`, `x` | Twitter/X video |
-| `toaudio` | `tomp3` | extract the audio of a video |
+| `igdl` | `instagram`, `ig` | Instagram |
+| `twitter` | `twdl`, `x` | Twitter / X |
+| `toaudio` | `tomp3` | Strip audio from video (`ffmpeg`) |
 
-### Settings (owner only)
+### Settings (owner)
 
-| command | aliases | what it does |
+| Command | Aliases | Description |
 | --- | --- | --- |
-| `prefix` | `setprefix` | change the command prefix |
-| `mode` | | `public` or `self` |
-| `setname` | `botname` | change the bot's display name |
-| `disable` / `enable` | | switch a command off / on |
-| `reload` | | reload the plugins folder |
-| `sysinfo` | | python version, memory, storage, uptime |
+| `prefix` | `setprefix` | Change command prefix |
+| `mode` | | `public` \| `self` |
+| `setname` | `botname` | Bot display name |
+| `disable` / `enable` | | Gate individual commands |
+| `reload` | | Reload `plugins/` |
+| `sysinfo` | | Host / Python / disk / ffmpeg |
+
+---
 
 ## Configuration
 
-`session/config.json` is created on first run:
+Created automatically at `session/config.json`:
 
 ```json
 {
@@ -215,150 +333,220 @@ Group commands must be used by a group admin (owner commands work anywhere).
 }
 ```
 
-| key | meaning |
-| --- | --- |
-| `prefix` | command prefix (`.` by default) |
-| `owner` | owner phone number, digits only |
-| `owners` | extra numbers that may use owner commands |
-| `bot_name` | name shown in `alive`, the menu and the banner |
-| `mode` | `public` = everybody may use the bot, `self` = only the owner |
-| `auto_reconnect` | reconnect after a dropped connection |
-| `disabled` | list of commands nobody may use |
-| `download_apis` | your own downloader endpoints (see below) |
+| Key | Type | Meaning |
+| --- | --- | --- |
+| `prefix` | string | Leading character(s) for commands |
+| `owner` | string | Primary owner, digits only |
+| `owners` | string[] | Additional owner numbers |
+| `bot_name` | string | Menu / alive / presence name |
+| `mode` | `public` \| `self` | Who may invoke commands |
+| `auto_reconnect` | bool | Reconnect after drop |
+| `disabled` | string[] | Hard-disabled command names |
+| `log_level` | string | `trace` … `error` / `silent` |
+| `download_apis` | object | Per-site extractor URL lists |
 
-Per group settings (welcome/goodbye/antilink/…) live in
-`session/data/groups.json` and are changed with the commands themselves.
+Per-group toggles (`welcome`, `goodbye`, `antilink`, …) live in `session/data/groups.json` and are mutated by the group commands themselves.
+
+---
 
 ## Downloaders
 
-The download commands need a public "extractor" API. WhatsApp only sees the
-final media URL, so any service that answers with a JSON containing a direct
-link works. The built-in defaults are free public endpoints and they *do* go
-offline or start rate limiting — when a command stops working, put your own
-endpoint in `config.json`:
+Social extractors are pluggable HTTP endpoints. WhatsApp only ever sees the final media URL the bot uploads to the official CDN.
 
 ```json
 {
   "download_apis": {
-    "youtube": ["https://your-api.example/api/yt?url={url}"],
-    "tiktok":  ["https://your-api.example/api/tiktok?url={url}"],
-    "facebook": ["https://your-api.example/api/fb?url={url}"],
+    "youtube":   ["https://your-api.example/api/yt?url={url}"],
+    "tiktok":    ["https://your-api.example/api/tiktok?url={url}"],
+    "facebook":  ["https://your-api.example/api/fb?url={url}"],
     "instagram": ["https://your-api.example/api/ig?url={url}"],
-    "twitter": ["https://your-api.example/api/twitter?url={url}"]
+    "twitter":   ["https://your-api.example/api/twitter?url={url}"]
   }
 }
 ```
 
-* `{url}` is replaced with the (percent encoded) link the user sent, `{id}` with
-  the YouTube video id.
-* Several endpoints may be listed — they are tried in order until one answers.
-* The response may be any JSON: the bot walks it and uses the first
-  `http(s)` value it finds under a media-ish key (`url`, `link`, `download`,
-  `play`, `hd`, `sd`, `video`, `mp4`, `mp3`, `audio`, `nowm`, …).
-* `dl <link>` needs no API at all: it fetches a direct file url and sends it as
-  an image, a video, an audio or a document depending on the content type.
+| Rule | Detail |
+| --- | --- |
+| Placeholders | `{url}` percent-encoded link; `{id}` YouTube video id |
+| Failover | Arrays are tried in order until one returns media |
+| JSON walk | First `http(s)` under keys such as `url`, `link`, `download`, `play`, `hd`, `mp4`, `mp3`, `nowm`, … |
+| Direct fetch | `.dl <url>` needs no extractor; type is guessed from `Content-Type` |
+| Size cap | Downloads refuse payloads above **48 MB** |
 
-Uploads and downloads go through WhatsApp's own media CDN (the bot implements
-the media key derivation, AES-CBC payload encryption and HMAC-SHA256 MAC
-itself), so no third party file host is involved.
+Media bytes are encrypted with the WhatsApp media HKDF schedule (AES-CBC + trailing MAC) before CDN upload — no third-party file host is involved.
 
-## Your own plugins
+---
 
-Every `*.py` file in `plugins/` is loaded at start-up, and again when the owner
-sends `.reload`. A plugin is a few lines:
+## Plugin SDK
+
+Every `plugins/*.py` file loads at startup and again on owner `.reload`.
 
 ```python
 from xbot.bot.plugin import command, on_message
 
 @command("hello", help="say hello", aliases=["hi"], category="custom")
 def hello(bot, message, args):
-    return "👋 hello " + " ".join(args)          # return a string = the reply
+    # Returning a string sends a quoted reply.
+    return "hello " + (" ".join(args) or message.push_name or "there")
 ```
 
-Decorator options: `name`, `help`, `aliases`, `category`, `hidden`,
-`owner_only`, `admin_only`, `group_only`.
+### Decorator options
 
-Inside a handler:
-
-| you can use | for |
+| Option | Effect |
 | --- | --- |
-| `bot.client` | the WhatsApp client (`send_text`, `send_image`, `send_video`, `send_audio`, `send_document`, `send_sticker`, `send_reaction`, `profile_picture_url`, `block_contact`, …) |
-| `bot.config` | settings from `config.json` |
-| `bot.group_settings` | per group toggles |
-| `bot.is_admin(group, jid)` | is a member an admin |
-| `message.reply(text)` | reply to the message (auto quotes it) |
-| `message.send(text)` | send to the same chat |
-| `message.react(emoji)` | react to the message |
-| `message.text`, `.args`, `.chat`, `.sender`, `.push_name`, `.is_group`, `.mentions`, `.quoted`, `.media_type` | message details |
-| `bot.download_media(message)` | bytes of the photo/video/sticker of a message |
-| `bot.log` | the logger |
+| `name` | Canonical command name |
+| `help` | Menu blurb |
+| `aliases` | Extra trigger names |
+| `category` | Menu grouping |
+| `hidden` | Omit from `.menu` |
+| `owner_only` | Owner gate |
+| `admin_only` | Group-admin gate |
+| `group_only` | Refuse DMs |
 
-`plugins/example.py` is a working example — delete it or use it as a starting
-point.
+### Handler surface
 
-## How it works
-
-Everything lives in the `xbot` package:
-
-| module | what it implements |
+| API | Role |
 | --- | --- |
-| `xbot/crypto/hashes.py` | SHA-1/256/512, HMAC, HKDF, PBKDF2 |
-| `xbot/crypto/aes.py` | AES-128/256 in CBC, CTR and GCM (GHASH included) on top of a small constant time-ish core |
-| `xbot/crypto/curve.py` | X25519, Ed25519, XEdDSA (`curve25519` + `ed25519` in pure Python) |
-| `xbot/wa/tokens.py` | the WhatsApp dictionary tokens and the "packed nibble/hex" rules |
-| `xbot/wa/binary.py` | the binary node codec (encoder + decoder, zlib compressed frames, JIDs) |
-| `xbot/wa/protoschema.py` | the generated protobuf schema of WhatsApp's messages |
-| `xbot/wa/protobuf.py` | a tiny protobuf reader/writer (varints, packed fields, nested messages) |
-| `xbot/wa/ws.py` | RFC 6455 WebSocket client (handshake, masking, ping/pong, fragmented frames) |
-| `xbot/wa/noise.py` | the Noise XX handshake with WhatsApp's certificate chain |
-| `xbot/wa/signal.py` | X3DH, the double ratchet, sender keys, group (skmsg) encryption, pre-key handling |
-| `xbot/media.py` | media key derivation, media payload crypto, upload/download to the WhatsApp CDN |
-| `xbot/store.py` | the session file (identity keys, account info, sessions) |
-| `xbot/client.py` | the WhatsApp client: login, pairing, message send/receive, receipts, retries, pre-keys, groups |
-| `xbot/bot/` | the bot itself: plugin registry, `Message` wrapper, runtime, QR encoder |
-| `main.py` | the command line entry point |
+| `bot.client` | `send_text`, `send_image`, `send_video`, `send_audio`, `send_document`, `send_sticker`, `send_reaction`, `profile_picture_url`, `block_contact`, … |
+| `bot.config` | Live `config.json` values |
+| `bot.group_settings` | Per-group toggles |
+| `bot.is_admin(group, jid)` | Admin probe |
+| `bot.download_media(message)` | Decrypted media bytes |
+| `bot.log` | Logger |
+| `message.reply` / `send` / `react` | Outbound helpers |
+| `message.text`, `.chat`, `.sender`, `.mentions`, `.quoted`, `.media_type` | Inbound fields |
 
-The wire format follows the multi-device protocol that the official app uses
-for *linked devices*: a Noise-encrypted WebSocket to `wss://web.whatsapp.com/ws/chat`,
-Signal-encrypted message stanzas, and the same media CDN for attachments.
+Hooks: `@on_message`, `@on_join`, `@on_leave`, `@on_call`. See `plugins/example.py` for a minimal template.
+
+---
+
+## Architecture
+
+<p align="center">
+  <img src="docs/assets/architecture.svg" alt="Architecture: bot → client → WebSocket / Noise / binary / protobuf / Signal" width="100%">
+</p>
+
+### Package map
+
+| Module | Responsibility |
+| --- | --- |
+| `xbot/crypto/hashes.py` | SHA-1/256/512, HMAC, HKDF, PBKDF2 (stdlib acceleration available) |
+| `xbot/crypto/aes.py` | AES-128/256 in CBC, CTR, GCM (+ GHASH) |
+| `xbot/crypto/curve.py` | X25519, Ed25519, XEdDSA |
+| `xbot/wa/tokens.py` | Dictionary tokens and packed nibble/hex rules |
+| `xbot/wa/binary.py` | WABinary encoder/decoder, JIDs, zlib frames |
+| `xbot/wa/protoschema.py` | Generated WhatsApp protobuf schema |
+| `xbot/wa/protobuf.py` | Compact reader/writer (varints, packed, nested) |
+| `xbot/wa/ws.py` | RFC 6455 client (masking, ping/pong, fragments) |
+| `xbot/wa/noise.py` | Noise XX with WhatsApp certificate chain |
+| `xbot/wa/signal.py` | X3DH, double ratchet, sender keys, pre-keys |
+| `xbot/media.py` | Media key schedule, upload/download to CDN |
+| `xbot/store.py` | Atomic JSON session (identity, sessions, devices) |
+| `xbot/client.py` | Login, pairing, send/recv, receipts, groups |
+| `xbot/bot/` | Plugin registry, `Message`, runtime, QR encoder |
+| `main.py` | Wizard, CLI, reconnect loop |
+
+### Wire path
+
+```text
+  phone / peer
+       │
+       ▼
+  wss://web.whatsapp.com/ws/chat
+       │  RFC 6455 frames
+       ▼
+  Noise XX  (AES-GCM transport keys)
+       │  length-prefixed frames
+       ▼
+  WABinary nodes  ── iq / message / receipt / notification
+       │
+       ▼
+  protobuf Message
+       │
+       ├── pkmsg / msg     → Signal session cipher
+       └── skmsg           → group sender keys (+ SKDM fan-out)
+```
+
+---
 
 ## Tests
 
-All checks are offline and use no test framework:
+All checks are offline. No third-party Python test framework is required.
 
 ```bash
-python3 tools/run_all_checks.py       # everything
+python3 tools/run_all_checks.py
 ```
 
-| check | what it proves |
+| Suite | Proves |
 | --- | --- |
-| `tests/test_bot.py` | the bot runtime, command parsing and plugins (fake client) |
-| `tools/interop/check_binary.py` | our node codec produces byte-identical output to Baileys and decodes its output |
-| `tools/interop/check_proto.py` | our protobuf codec matches WhatsApp's schema |
-| `tools/interop/check_signal.py` | X3DH + double ratchet + sender keys interoperate with libsignal |
-| `tools/interop/check_qr.py` | a real decoder (jsQR) reads every QR we produce, and the terminal rendering round-trips |
-| `tools/interop/check_client.py` | a full login against a fake WhatsApp server, ending with an encrypted message that is sent and a reply that is decrypted |
+| `tests/test_bot.py` | Runtime, parsing, plugins (fake client) |
+| `tools/interop/check_binary.py` | Byte-identical WABinary vs Baileys |
+| `tools/interop/check_proto.py` | Protobuf codec vs schema vectors |
+| `tools/interop/check_signal.py` | X3DH + ratchet + sender keys vs libsignal |
+| `tools/interop/check_qr.py` | jsQR decodes every matrix; terminal round-trip |
+| `tools/interop/check_client.py` | Full login against mock server; encrypt + decrypt |
 
-The interop checks need Node.js and a second checkout of Baileys
-(`npm install` inside `tools/interop`); the unit tests and the bot itself need
-Python only.
+```bash
+# Unit only (Python)
+python3 tests/test_bot.py
+
+# Interop needs Node + deps once
+cd tools/interop && npm install && cd ../..
+python3 tools/run_all_checks.py
+```
+
+---
 
 ## Limitations and safety
 
-* **This is an unofficial client.** It speaks WhatsApp's private protocol and
-  that is against WhatsApp's Terms of Service. Accounts *do* get banned for
-  using bots — use a number you can afford to lose, and do not spam.
-* The bot can only do what a linked device can do: group administration, media,
-  reacting, reading chats. Business-only APIs (catalogues, templates) are not
-  implemented.
-* Voice/video calls, live location and status stories are not fully
-  implemented. `on_call` hooks exist but the bot does not answer calls.
-* Group-only features need the bot to be an **admin** of the group.
-* `sticker`, `toimg` and `toaudio` shell out to `ffmpeg`/`ffprobe` from Termux
-  (`pkg install ffmpeg`); without it those three commands answer with an error,
-  everything else still works.
-* Everything runs in one process with a handful of threads; media is held in
-  memory while it is encrypted, and `dl` refuses files above 48 MB so that a big
-  video cannot eat all the RAM.
-* Keep `session/session.json` secret, and prefer `mode: "self"` (or
-  `python main.py --self`) if you do not want other people to use the bot.
+| Topic | Detail |
+| --- | --- |
+| ToS | Unofficial multi-device client. Using it can get the account banned. Use a disposable number; do not spam. |
+| Scope | Linked-device capabilities only. Business catalogues / message templates are not implemented. |
+| Calls / status | Voice and video calls, live location, and status stories are incomplete. |
+| Admin rights | Group moderation requires the bot to be a group admin. |
+| ffmpeg | `sticker`, `toimg`, `toaudio` shell out to Termux `ffmpeg`; other commands work without it. |
+| Memory | Single process, small thread pool. Media is buffered while encrypting; `.dl` caps at 48 MB. |
+| Hardening | Prefer `mode: "self"` or `python main.py --self` on personal accounts. Guard `session/session.json`. |
+
+```text
+  operational checklist
+  ──────────────────────────────────────────
+  [ ] disposable WhatsApp number
+  [ ] session/ excluded from git and backups you share
+  [ ] owner set (wizard does this when pairing)
+  [ ] self mode if the bot must not serve strangers
+  [ ] termux-wake-lock or tmux for unattended runs
+  ──────────────────────────────────────────
+```
+
+---
+
+## Sinhala summary
+
+| පියවර | විස්තරය |
+| --- | --- |
+| 1 | Termux: `pkg install python` |
+| 2 | `git clone …` → `cd X-Bot-Whatsapp` → `python main.py` |
+| 3 | Wizard එකේ **1** තෝරලා අංකය දෙන්න (`9477…` හෝ `07…`) |
+| 4 | Terminal code එක WhatsApp → Linked devices → Link with phone number |
+| 5 | ONLINE ආවම `.ping` / `.menu` |
+| QR | `python main.py` → **2**, හෝ `python main.py --qr` |
+
+`session/session.json` ගොනුව රහසිගතව තබන්න — එය WhatsApp login එකයි.
+
+---
+
+## License and attribution
+
+Protocol behaviour follows the public multi-device design used by linked WhatsApp clients. Cryptographic and codec modules in this repository are original pure-Python implementations for study and personal automation.
+
+<p align="center">
+  <img src="docs/assets/icon-python.svg" width="28" alt="">
+  &nbsp;
+  <img src="docs/assets/icon-lock.svg" width="28" alt="">
+  &nbsp;
+  <img src="docs/assets/icon-phone.svg" width="28" alt="">
+  &nbsp;
+  <sub>X-Bot · pure Python · stdlib only</sub>
+</p>

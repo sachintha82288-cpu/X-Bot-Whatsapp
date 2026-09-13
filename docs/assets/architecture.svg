@@ -1,0 +1,84 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="520" viewBox="0 0 1100 520" role="img" aria-label="Architecture diagram">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0B1220"/>
+      <stop offset="100%" stop-color="#101A2C"/>
+    </linearGradient>
+    <linearGradient id="g1" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#25D366"/><stop offset="100%" stop-color="#00E5A8"/>
+    </linearGradient>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10z" fill="#3DDC97"/>
+    </marker>
+  </defs>
+  <rect width="1100" height="520" rx="16" fill="url(#bg)"/>
+  <text x="40" y="48" font-family="ui-sans-serif, system-ui, sans-serif" font-size="20" font-weight="700" fill="#F4F7FB">Protocol path</text>
+  <text x="40" y="74" font-family="ui-sans-serif, system-ui, sans-serif" font-size="13" fill="#7C8AA5">Every box is implemented in this repository with the Python standard library only.</text>
+
+  <!-- layers -->
+  <g font-family="ui-sans-serif, system-ui, sans-serif">
+    <!-- row 1 -->
+    <rect x="40" y="110" width="200" height="78" rx="14" fill="#122033" stroke="#2A3A55"/>
+    <text x="56" y="142" font-size="12" fill="#7C8AA5">ENTRY</text>
+    <text x="56" y="168" font-size="16" font-weight="600" fill="#F4F7FB">main.py · Bot</text>
+
+    <rect x="280" y="110" width="200" height="78" rx="14" fill="#122033" stroke="#2A3A55"/>
+    <text x="296" y="142" font-size="12" fill="#7C8AA5">SESSION</text>
+    <text x="296" y="168" font-size="16" font-weight="600" fill="#F4F7FB">AuthStore</text>
+
+    <rect x="520" y="110" width="200" height="78" rx="14" fill="#0E1F18" stroke="#1F6B45"/>
+    <text x="536" y="142" font-size="12" fill="#3DDC97">CLIENT</text>
+    <text x="536" y="168" font-size="16" font-weight="600" fill="#C9F5DD">WAClient</text>
+
+    <rect x="760" y="110" width="300" height="78" rx="14" fill="#122033" stroke="#2A3A55"/>
+    <text x="776" y="142" font-size="12" fill="#7C8AA5">PLUGINS</text>
+    <text x="776" y="168" font-size="16" font-weight="600" fill="#F4F7FB">core · group · tools · dl</text>
+
+    <!-- arrows top -->
+    <line x1="240" y1="149" x2="280" y2="149" stroke="#3DDC97" stroke-width="2" marker-end="url(#arrow)"/>
+    <line x1="480" y1="149" x2="520" y2="149" stroke="#3DDC97" stroke-width="2" marker-end="url(#arrow)"/>
+    <line x1="720" y1="149" x2="760" y2="149" stroke="#3DDC97" stroke-width="2" marker-end="url(#arrow)"/>
+
+    <!-- row 2 transport -->
+    <text x="40" y="240" font-size="13" fill="#7C8AA5" letter-spacing="1">TRANSPORT &amp; CRYPTO</text>
+
+    <rect x="40" y="260" width="160" height="70" rx="12" fill="#121A2B" stroke="#2A3A55"/>
+    <text x="56" y="290" font-size="11" fill="#7C8AA5">RFC 6455</text>
+    <text x="56" y="312" font-size="15" font-weight="600" fill="#E8EEF8">WebSocket</text>
+
+    <rect x="230" y="260" width="160" height="70" rx="12" fill="#121A2B" stroke="#2A3A55"/>
+    <text x="246" y="290" font-size="11" fill="#7C8AA5">Noise_XX</text>
+    <text x="246" y="312" font-size="15" font-weight="600" fill="#E8EEF8">AES-GCM</text>
+
+    <rect x="420" y="260" width="160" height="70" rx="12" fill="#121A2B" stroke="#2A3A55"/>
+    <text x="436" y="290" font-size="11" fill="#7C8AA5">WABinary</text>
+    <text x="436" y="312" font-size="15" font-weight="600" fill="#E8EEF8">Node codec</text>
+
+    <rect x="610" y="260" width="160" height="70" rx="12" fill="#121A2B" stroke="#2A3A55"/>
+    <text x="626" y="290" font-size="11" fill="#7C8AA5">Protobuf</text>
+    <text x="626" y="312" font-size="15" font-weight="600" fill="#E8EEF8">Message</text>
+
+    <rect x="800" y="260" width="260" height="70" rx="12" fill="#0E1F18" stroke="#1F6B45"/>
+    <text x="816" y="290" font-size="11" fill="#3DDC97">E2E</text>
+    <text x="816" y="312" font-size="15" font-weight="600" fill="#C9F5DD">Signal · Sender Keys</text>
+
+    <line x1="200" y1="295" x2="230" y2="295" stroke="#3DDC97" stroke-width="2" marker-end="url(#arrow)"/>
+    <line x1="390" y1="295" x2="420" y2="295" stroke="#3DDC97" stroke-width="2" marker-end="url(#arrow)"/>
+    <line x1="580" y1="295" x2="610" y2="295" stroke="#3DDC97" stroke-width="2" marker-end="url(#arrow)"/>
+    <line x1="770" y1="295" x2="800" y2="295" stroke="#3DDC97" stroke-width="2" marker-end="url(#arrow)"/>
+
+    <!-- bottom primitives -->
+    <text x="40" y="390" font-size="13" fill="#7C8AA5" letter-spacing="1">PRIMITIVES</text>
+    <rect x="40" y="410" width="240" height="64" rx="12" fill="#162033" stroke="#2A3A55"/>
+    <text x="56" y="448" font-size="15" font-weight="600" fill="#E8EEF8">X25519 · Ed25519 · XEdDSA</text>
+
+    <rect x="310" y="410" width="240" height="64" rx="12" fill="#162033" stroke="#2A3A55"/>
+    <text x="326" y="448" font-size="15" font-weight="600" fill="#E8EEF8">AES-CBC / CTR / GCM</text>
+
+    <rect x="580" y="410" width="240" height="64" rx="12" fill="#162033" stroke="#2A3A55"/>
+    <text x="596" y="448" font-size="15" font-weight="600" fill="#E8EEF8">SHA · HMAC · HKDF · PBKDF2</text>
+
+    <rect x="850" y="410" width="210" height="64" rx="12" fill="#162033" stroke="#2A3A55"/>
+    <text x="866" y="448" font-size="15" font-weight="600" fill="#E8EEF8">Media CDN crypto</text>
+  </g>
+</svg>

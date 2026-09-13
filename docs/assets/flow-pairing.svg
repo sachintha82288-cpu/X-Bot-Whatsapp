@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="280" viewBox="0 0 1100 280" role="img" aria-label="Pairing flow">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0B1220"/><stop offset="100%" stop-color="#101A2C"/>
+    </linearGradient>
+    <marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10z" fill="#3DDC97"/>
+    </marker>
+  </defs>
+  <rect width="1100" height="280" rx="16" fill="url(#bg)"/>
+  <text x="36" y="42" font-family="ui-sans-serif, system-ui, sans-serif" font-size="18" font-weight="700" fill="#F4F7FB">Link flow</text>
+  <text x="36" y="66" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12" fill="#7C8AA5">Phone number pairing (recommended on Termux) or QR scan</text>
+
+  <g font-family="ui-sans-serif, system-ui, sans-serif">
+    <rect x="36" y="100" width="180" height="110" rx="14" fill="#122033" stroke="#2A3A55"/>
+    <circle cx="64" cy="128" r="12" fill="#0E1F18" stroke="#25D366" stroke-width="2"/>
+    <text x="60" y="133" font-size="12" font-weight="700" fill="#3DDC97">1</text>
+    <text x="56" y="168" font-size="15" font-weight="600" fill="#F4F7FB">Run wizard</text>
+    <text x="56" y="190" font-size="12" fill="#7C8AA5">python main.py</text>
+
+    <rect x="250" y="100" width="180" height="110" rx="14" fill="#122033" stroke="#2A3A55"/>
+    <circle cx="278" cy="128" r="12" fill="#0E1F18" stroke="#25D366" stroke-width="2"/>
+    <text x="274" y="133" font-size="12" font-weight="700" fill="#3DDC97">2</text>
+    <text x="270" y="168" font-size="15" font-weight="600" fill="#F4F7FB">Enter number</text>
+    <text x="270" y="190" font-size="12" fill="#7C8AA5">or scan QR</text>
+
+    <rect x="464" y="100" width="180" height="110" rx="14" fill="#0E1F18" stroke="#1F6B45"/>
+    <circle cx="492" cy="128" r="12" fill="#0B1220" stroke="#25D366" stroke-width="2"/>
+    <text x="488" y="133" font-size="12" font-weight="700" fill="#3DDC97">3</text>
+    <text x="484" y="168" font-size="15" font-weight="600" fill="#C9F5DD">Pairing code</text>
+    <text x="484" y="190" font-size="12" fill="#7C8AA5">ABCD-EFGH</text>
+
+    <rect x="678" y="100" width="180" height="110" rx="14" fill="#122033" stroke="#2A3A55"/>
+    <circle cx="706" cy="128" r="12" fill="#0E1F18" stroke="#25D366" stroke-width="2"/>
+    <text x="702" y="133" font-size="12" font-weight="700" fill="#3DDC97">4</text>
+    <text x="698" y="168" font-size="15" font-weight="600" fill="#F4F7FB">Confirm on phone</text>
+    <text x="698" y="190" font-size="12" fill="#7C8AA5">Linked devices</text>
+
+    <rect x="892" y="100" width="180" height="110" rx="14" fill="#0E1F18" stroke="#1F6B45"/>
+    <circle cx="920" cy="128" r="12" fill="#0B1220" stroke="#25D366" stroke-width="2"/>
+    <text x="916" y="133" font-size="12" font-weight="700" fill="#3DDC97">5</text>
+    <text x="912" y="168" font-size="15" font-weight="600" fill="#C9F5DD">Bot online</text>
+    <text x="912" y="190" font-size="12" fill="#7C8AA5">.ping · .menu</text>
+
+    <line x1="216" y1="155" x2="250" y2="155" stroke="#3DDC97" stroke-width="2" marker-end="url(#a)"/>
+    <line x1="430" y1="155" x2="464" y2="155" stroke="#3DDC97" stroke-width="2" marker-end="url(#a)"/>
+    <line x1="644" y1="155" x2="678" y2="155" stroke="#3DDC97" stroke-width="2" marker-end="url(#a)"/>
+    <line x1="858" y1="155" x2="892" y2="155" stroke="#3DDC97" stroke-width="2" marker-end="url(#a)"/>
+  </g>
+</svg>

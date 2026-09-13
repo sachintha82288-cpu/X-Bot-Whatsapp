@@ -482,7 +482,10 @@ def _sender_key_material(state: dict, iteration: int) -> dict:
 
 
 def group_encrypt(state: dict, plaintext: bytes) -> bytes:
-    iteration = state["iteration"] if state["iteration"] == 0 else state["iteration"] + 1
+    # Use the current chain iteration, then let _sender_key_material advance it.
+    # (The old `iteration if 0 else iteration+1` form skipped every other
+    # counter and broke interop with Baileys / libsignal.)
+    iteration = int(state.get("iteration") or 0)
     keys = _sender_key_material(state, iteration)
     ciphertext = cbc_encrypt(keys["cipherKey"], keys["iv"], plaintext, pad=True)
     body = pb.encode("SenderKeyMessage", {

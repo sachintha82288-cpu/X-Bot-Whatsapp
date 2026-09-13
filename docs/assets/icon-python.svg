@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-label="Pure Python">
+  <rect width="64" height="64" rx="16" fill="#0E1A2A"/>
+  <rect x="1" y="1" width="62" height="62" rx="15" fill="none" stroke="#2A3A55" stroke-width="1"/>
+  <path d="M32 12c-8 0-7.5 3.5-7.5 3.5v4h7.6v1.2H20.2S16 20.2 16 28.5 19.8 36 19.8 36h4.4v-3.8c0-4.4 3.8-8 8.4-8h7.1c3.7 0 6.7-3 6.7-6.7V16.8S47.8 12 32 12zm-4.2 5.2a1.8 1.8 0 1 1 0 3.6 1.8 1.8 0 0 1 0-3.6z" fill="#3DDC97"/>
+  <path d="M32 52c8 0 7.5-3.5 7.5-3.5v-4h-7.6v-1.2h11.9S48 43.8 48 35.5 44.2 28 44.2 28h-4.4v3.8c0 4.4-3.8 8-8.4 8h-7.1c-3.7 0-6.7 3-6.7 6.7v4.5S16.2 52 32 52zm4.2-5.2a1.8 1.8 0 1 1 0-3.6 1.8 1.8 0 0 1 0 3.6z" fill="#5B9BD5"/>
+</svg>

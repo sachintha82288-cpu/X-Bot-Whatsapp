@@ -1,0 +1,86 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="420" viewBox="0 0 1280 420" role="img" aria-label="X-Bot WhatsApp">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0B1220"/>
+      <stop offset="45%" stop-color="#102A24"/>
+      <stop offset="100%" stop-color="#0B1220"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#25D366"/>
+      <stop offset="50%" stop-color="#3DDC97"/>
+      <stop offset="100%" stop-color="#00E5A8"/>
+    </linearGradient>
+    <linearGradient id="card" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#162033" stop-opacity="0.92"/>
+      <stop offset="100%" stop-color="#0F1726" stop-opacity="0.88"/>
+    </linearGradient>
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="18" result="blur"/>
+      <feColorMatrix in="blur" type="matrix" values="0 0 0 0 0.15  0 0 0 0 0.83  0 0 0 0 0.40  0 0 0 0.55 0"/>
+      <feMerge>
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse">
+      <path d="M32 0H0V32" fill="none" stroke="#1E2A3C" stroke-width="1" opacity="0.55"/>
+    </pattern>
+    <radialGradient id="orb" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#25D366" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#25D366" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="1280" height="420" fill="url(#bg)"/>
+  <rect width="1280" height="420" fill="url(#grid)"/>
+  <circle cx="1080" cy="70" r="180" fill="url(#orb)"/>
+  <circle cx="180" cy="360" r="140" fill="url(#orb)"/>
+
+  <!-- left brand mark -->
+  <g transform="translate(72,96)" filter="url(#glow)">
+    <rect x="0" y="0" width="120" height="120" rx="28" fill="#0E1A16" stroke="url(#accent)" stroke-width="2"/>
+    <path d="M34 78c0-22 18-40 40-40s40 18 40 40c0 14-7 26-18 33l4 14-16-8c-3 1-7 1-10 1-22 0-40-18-40-40z" fill="url(#accent)"/>
+    <path d="M48 72h12M48 80h28M48 88h18" stroke="#0B1220" stroke-width="4" stroke-linecap="round" opacity="0.85"/>
+    <text x="60" y="158" text-anchor="middle" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif" font-size="13" fill="#7C8AA5" letter-spacing="3">X-BOT</text>
+  </g>
+
+  <!-- title block -->
+  <g font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif">
+    <text x="230" y="150" font-size="54" font-weight="700" fill="#F4F7FB" letter-spacing="-0.5">X-Bot WhatsApp</text>
+    <text x="230" y="196" font-size="22" fill="#A7B4C9">Pure-Python multi-device client · zero third-party packages</text>
+
+    <g transform="translate(230,230)">
+      <rect width="168" height="36" rx="18" fill="#12261D" stroke="#1F6B45" stroke-width="1"/>
+      <circle cx="18" cy="18" r="5" fill="#25D366"/>
+      <text x="34" y="23" font-size="14" fill="#C9F5DD">stdlib only</text>
+
+      <rect x="184" width="176" height="36" rx="18" fill="#121A2B" stroke="#2A3A55" stroke-width="1"/>
+      <text x="202" y="23" font-size="14" fill="#C5D0E2">Python 3.9+</text>
+
+      <rect x="376" width="188" height="36" rx="18" fill="#121A2B" stroke="#2A3A55" stroke-width="1"/>
+      <text x="394" y="23" font-size="14" fill="#C5D0E2">Termux ready</text>
+
+      <rect x="580" width="210" height="36" rx="18" fill="#121A2B" stroke="#2A3A55" stroke-width="1"/>
+      <text x="598" y="23" font-size="14" fill="#C5D0E2">~17 MB RSS</text>
+    </g>
+
+    <text x="230" y="318" font-size="16" fill="#7C8AA5">Noise XX · Signal double ratchet · WABinary · AES-GCM · QR pairing</text>
+  </g>
+
+  <!-- right architecture card -->
+  <g transform="translate(920,108)">
+    <rect width="300" height="220" rx="18" fill="url(#card)" stroke="#243247" stroke-width="1"/>
+    <text x="24" y="36" font-family="ui-sans-serif, system-ui, sans-serif" font-size="13" fill="#7C8AA5" letter-spacing="2">STACK</text>
+    <g font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13">
+      <rect x="24" y="52" width="252" height="28" rx="8" fill="#0E1F18" stroke="#1F6B45"/>
+      <text x="36" y="71" fill="#3DDC97">bot / plugins</text>
+      <rect x="24" y="88" width="252" height="28" rx="8" fill="#121A2B" stroke="#2A3A55"/>
+      <text x="36" y="107" fill="#C5D0E2">client · media · store</text>
+      <rect x="24" y="124" width="252" height="28" rx="8" fill="#121A2B" stroke="#2A3A55"/>
+      <text x="36" y="143" fill="#C5D0E2">signal · noise · binary</text>
+      <rect x="24" y="160" width="252" height="28" rx="8" fill="#121A2B" stroke="#2A3A55"/>
+      <text x="36" y="179" fill="#C5D0E2">curve · aes · hashes</text>
+      <text x="24" y="208" fill="#5C6B82" font-size="11">wss://web.whatsapp.com/ws/chat</text>
+    </g>
+  </g>
+</svg>

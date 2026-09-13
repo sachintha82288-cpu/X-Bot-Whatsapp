@@ -26,7 +26,7 @@ from .media import MediaSupport, guess_type, mimetype_for
 from .store import AuthStore, b64, encode_big_endian, unb64
 from .wa import binary, protobuf as pb
 from .wa import signal as sig
-from .wa.binary import Node
+from .wa.binary import Node, jid_normalized
 from .wa.noise import NOISE_HEADER, NoiseHandler
 from .wa.ws import WebSocketClient, WebSocketError
 
@@ -239,7 +239,18 @@ class WAClient(MediaSupport):
 
     # ----------------------------------------------------------------- events
     def on(self, event: str, callback: Callable) -> None:
-        self._handlers.setdefault(event, []).append(callback)
+        """Register ``callback`` for ``event`` (ignores exact duplicates)."""
+        handlers = self._handlers.setdefault(event, [])
+        if callback not in handlers:
+            handlers.append(callback)
+
+    def off(self, event: str, callback: Optional[Callable] = None) -> None:
+        """Remove one callback, or every callback for ``event``."""
+        if callback is None:
+            self._handlers.pop(event, None)
+            return
+        handlers = self._handlers.get(event) or []
+        self._handlers[event] = [item for item in handlers if item is not callback]
 
     def emit(self, event: str, *args) -> None:
         for callback in list(self._handlers.get(event, [])):
@@ -259,10 +270,27 @@ class WAClient(MediaSupport):
 
     def connect(self) -> bool:
         """Open the socket, run the Noise handshake and log in."""
+        # Drop any previous socket cleanly before opening a new one (reconnect).
+        if self.ws is not None:
+            try:
+                self.ws.close()
+            except Exception:  # pragma: no cover
+                pass
+            self.ws = None
+        self.noise = None
+        self.connected = False
+        self.is_open = False
         self._stop.clear()
         self._handshake_event.clear()
         self._handshake_message = None
         self._last_recv = time.time()
+        self._qr_count = 0
+        # Drop in-flight queries from a previous connection so they cannot
+        # steal replies that belong to the new socket.
+        with self._query_lock:
+            for entry in self._queries.values():
+                entry["event"].set()
+            self._queries.clear()
 
         url = self.url
         routing_info = self.store.creds.get("routingInfo")
@@ -322,6 +350,7 @@ class WAClient(MediaSupport):
         return True
 
     def disconnect(self, reason: str = "closed") -> None:
+        already_closed = not self.is_open and not self.connected
         self._stop.set()
         self.connected = False
         self.is_open = False
@@ -331,7 +360,8 @@ class WAClient(MediaSupport):
                 self.ws.close()
             except Exception:  # pragma: no cover
                 pass
-        self.emit("connection", "close", reason)
+        if not already_closed:
+            self.emit("connection", "close", reason)
 
     # ---------------------------------------------------------------- sending
     def send_raw(self, data: bytes) -> None:
@@ -399,12 +429,17 @@ class WAClient(MediaSupport):
             self.log.error("node handling failed: %s", exc)
 
     def _on_ws_close(self, code, reason) -> None:
+        was_open = self.is_open or self.connected
         self.is_open = False
         self.connected = False
         if not self._handshake_event.is_set():
             self._handshake_event.set()
-        self.log.info("connection closed (%s %s)", code, reason)
-        self.emit("connection", "close", reason or f"code {code}")
+        # Only emit when the peer closed us — disconnect() already emits.
+        if was_open and not self._stop.is_set():
+            self.log.info("connection closed (%s %s)", code, reason)
+            self.emit("connection", "close", reason or f"code {code}")
+        else:
+            self.log.debug("connection closed (%s %s)", code, reason)
 
     def _on_ws_error(self, exc: Exception) -> None:
         self.log.debug("websocket error: %s", exc)
@@ -540,12 +575,20 @@ class WAClient(MediaSupport):
         if not self.store.is_registered():
             return self._registration_payload()
         decoded = binary.jid_decode(self.me_id)
+        if not decoded or not decoded[0]:
+            self.log.warn("stored me id is invalid (%r) — re-registering", self.me_id)
+            return self._registration_payload()
         user, _server, device, _domain = decoded
+        try:
+            username = int(user)
+        except (TypeError, ValueError):
+            self.log.warn("stored me user is not numeric (%r) — re-registering", user)
+            return self._registration_payload()
         payload = self._client_payload()
         payload.update({
             "passive": True,
             "pull": True,
-            "username": int(user),
+            "username": username,
             "device": device or 0,
             "lidDbMigrated": False,
         })
@@ -602,22 +645,41 @@ class WAClient(MediaSupport):
 
     # ------------------------------------------------------------------- QR
     def _handle_pair_device(self, stanza: binary.Node, pair_device: binary.Node) -> None:
+        """Reply to pair-device and rotate QR refs on a background thread.
+
+        The wait must not run on the WebSocket reader thread — otherwise the
+        pair-success IQ that arrives after the user scans cannot be handled.
+        """
         self.send_node(binary.Node("iq", {"to": S_WHATSAPP_NET, "type": "result",
                                           "id": stanza.attrs.get("id")}))
-        refs = [r.text() for r in get_children(pair_device, "ref")]
+        refs = [r.text() for r in get_children(pair_device, "ref") if r.text()]
+        if not refs:
+            return
+        if self._qr_count == 0 and self.log_qr:
+            self.log.info("scan the QR code shown by the bot to link this device")
+        thread = threading.Thread(
+            target=self._rotate_qr_refs,
+            args=(list(refs),),
+            name="wa-qr-rotate",
+            daemon=True,
+        )
+        thread.start()
+
+    def _rotate_qr_refs(self, refs: List[str]) -> None:
         noise_b64 = b64(self.store.creds["noiseKey"]["public"])
         identity_b64 = b64(self.store.creds["signedIdentityKey"]["public"])
         adv_b64 = self.store.creds["advSecretKey"]
-        if self._qr_count == 0 and self.log_qr:
-            self.log.info("scan the QR code shown by the bot to link this device")
+        if isinstance(adv_b64, (bytes, bytearray)):
+            adv_b64 = b64(adv_b64)
+        platform = str(self._companion_platform_id())
         for ref in refs:
-            if self._stop.is_set() or self.store.is_registered():
+            if self._stop.is_set() or self.store.is_registered() or not self.is_open:
                 return
             qr = ("https://wa.me/settings/linked_devices#" +
-                  ",".join([ref, noise_b64, identity_b64, adv_b64, str(self._companion_platform_id())]))
+                  ",".join([ref, noise_b64, identity_b64, adv_b64, platform]))
             self._qr_count += 1
             self.emit("qr", qr)
-            # a QR ref stays valid for 60s, then 20s for the following ones
+            # a QR ref stays valid for ~60s, then ~20s for the following ones
             delay = 60 if self._qr_count == 1 else 20
             if self._stop.wait(delay):
                 return
@@ -630,19 +692,40 @@ class WAClient(MediaSupport):
                 "Safari": 6}.get(browser, 9)
 
     def request_pairing_code(self, phone_number: str, custom_code: Optional[str] = None) -> str:
-        """Ask WhatsApp for an 8 character pairing code for ``phone_number``."""
+        """Ask WhatsApp for an 8 character pairing code for ``phone_number``.
+
+        The code is shown to the user; they type it on the primary phone under
+        *Linked devices ▸ Link with phone number*.  ``me`` is filled with the
+        phone number only so the pairing IQ has a jid — full registration
+        still happens later via ``pair-success`` (``account`` is what marks
+        the device as linked).
+        """
+        if not self.is_open or not self.connected:
+            raise WebSocketError("client is not connected")
         code = custom_code or bytes_to_crockford(os.urandom(5))
         if custom_code and len(custom_code) != 8:
             raise ValueError("a custom pairing code must be exactly 8 characters")
         phone_number = "".join(ch for ch in str(phone_number) if ch.isdigit())
+        if not phone_number:
+            raise ValueError("phone number is required")
+        # Keep the ephemeral key fresh for every pairing attempt.
+        if "pairingEphemeralKeyPair" not in self.store.creds or not self.store.creds.get("pairingEphemeralKeyPair"):
+            from .store import new_key_pair
+            self.store.creds["pairingEphemeralKeyPair"] = new_key_pair()
         self.store.creds["pairingCode"] = code
-        self.store.creds["me"] = {"id": binary.jid_encode(phone_number, S_WHATSAPP_NET), "name": "~"}
+        # Do NOT mark the session as registered here — only store the phone so
+        # the IQ carries a jid.  ``is_registered`` requires ``account``.
+        self.store.creds["me"] = {
+            "id": binary.jid_encode(phone_number, S_WHATSAPP_NET),
+            "name": self.push_name or "~",
+        }
         self.store.touch()
+        self.store.save()
 
         salt = os.urandom(32)
         iv = os.urandom(16)
         key = pbkdf2_sha256(code.encode(), salt, 131072, 32)
-        ephemeral_public = self.store.creds["pairingEphemeralKeyPair"]["public"]
+        ephemeral_public = bytes(self.store.creds["pairingEphemeralKeyPair"]["public"])
         wrapped = ctr_crypt(key, iv, ephemeral_public)
 
         node = binary.Node("iq", {"to": S_WHATSAPP_NET, "type": "set", "xmlns": "md",
@@ -652,12 +735,16 @@ class WAClient(MediaSupport):
                 "stage": "companion_hello",
                 "should_show_push_notification": "true",
             }, [
-                binary.Node("link_code_pairing_wrapped_companion_ephemeral_pub", {}, salt + iv + wrapped),
-                binary.Node("companion_server_auth_key_pub", {}, self.store.creds["noiseKey"]["public"]),
-                binary.Node("companion_platform_id", {}, str(self._companion_platform_id())),
+                binary.Node("link_code_pairing_wrapped_companion_ephemeral_pub", {},
+                            salt + iv + wrapped),
+                binary.Node("companion_server_auth_key_pub", {},
+                            bytes(self.store.creds["noiseKey"]["public"])),
+                binary.Node("companion_platform_id", {},
+                            str(self._companion_platform_id()).encode()),
                 binary.Node("companion_platform_display", {},
-                            f"{self.browser[1]} ({self.browser[0]})"),
-                binary.Node("link_code_pairing_nonce", {}, "0"),
+                            f"{self.browser[1]} ({self.browser[0]})".encode()),
+                # Baileys sends a single zero byte, not the string "0".
+                binary.Node("link_code_pairing_nonce", {}, b"\x00"),
             ]),
         ])
         self.send_node(node)
@@ -722,17 +809,28 @@ class WAClient(MediaSupport):
         jid = device_node.attrs.get("jid")
         lid = device_node.attrs.get("lid")
         biz_name = business_node.attrs.get("name") if business_node is not None else None
+        previous_name = (self.store.me or {}).get("name")
         self.store.creds["account"] = account
-        self.store.creds["me"] = {"id": jid, "lid": lid, "name": biz_name}
+        self.store.creds["me"] = {
+            "id": jid,
+            "lid": lid,
+            "name": biz_name or previous_name or self.push_name,
+        }
         self.store.creds["platform"] = platform_node.attrs.get("name") if platform_node is not None else None
+        self.store.creds["pairingCode"] = None
         identities = list(self.store.creds.get("signalIdentities") or [])
-        identities.append({"identifier": {"name": lid, "deviceId": 0},
-                           "identifierKey": sig.prefixed(signature_key)})
+        if lid:
+            identities.append({"identifier": {"name": lid, "deviceId": 0},
+                               "identifierKey": sig.prefixed(signature_key)})
         self.store.creds["signalIdentities"] = identities
         self.store.save(force=True)
         self.emit("creds", self.store.creds)
-        self.log.info("paired successfully as %s — the server will restart the connection", jid)
-        self.send_node(reply)
+        self.emit("paired", jid)
+        self.log.info("paired successfully as %s — waiting for the server to open the session", jid)
+        try:
+            self.send_node(reply)
+        except WebSocketError as exc:
+            self.log.warn("could not send pair-device-sign: %s", exc)
 
     # ------------------------------------------------------------ login done
     def _handle_success(self, node: binary.Node) -> None:
@@ -740,6 +838,14 @@ class WAClient(MediaSupport):
         if lid and self.store.me:
             self.store.creds["me"]["lid"] = lid
             self.store.touch()
+            self.store.save()
+        # After pair-success WhatsApp sometimes sends <success> on the same
+        # socket before restarting.  Without an account the device is still
+        # mid-pairing — don't claim we are fully open yet.
+        if not self.store.is_registered():
+            self.log.info("received success before pair-success completed — still pairing")
+            self.emit("connection", "pairing")
+            return
         self.log.info("connection opened as %s", self.store.me_id)
         self.emit("open", node)
         self.emit("connection", "open")
@@ -755,6 +861,10 @@ class WAClient(MediaSupport):
                 self.send_node(binary.Node("iq", {"to": S_WHATSAPP_NET, "type": "set", "xmlns": "passive",
                                                   "id": self.next_tag()},
                                            [binary.Node("active", {})]))
+            except WebSocketError:
+                pass
+            try:
+                self.send_node(binary.Node("presence", {"name": self.push_name or "X-Bot"}))
             except WebSocketError:
                 pass
 
@@ -788,10 +898,14 @@ class WAClient(MediaSupport):
     def _upload_pre_keys_if_required(self) -> None:
         result = self.query(binary.Node("iq", {
             "to": S_WHATSAPP_NET, "type": "get", "xmlns": "encrypt",
+            "id": self.next_tag(),
         }, [binary.Node("count", {})]))
         count_node = get_child(result, "count") if result is not None else None
         available = int(count_node.attrs.get("value", 0)) if count_node is not None else 0
-        count = INITIAL_PREKEY_COUNT if available == 0 else MIN_PREKEY_COUNT
+        if available >= MIN_PREKEY_COUNT:
+            self.log.debug("server already has %d pre-keys — skipping upload", available)
+            return
+        count = INITIAL_PREKEY_COUNT if available == 0 else max(MIN_PREKEY_COUNT, MIN_PREKEY_COUNT - available)
         self.upload_pre_keys(count)
 
     def upload_pre_keys(self, count: int = MIN_PREKEY_COUNT) -> None:
@@ -1120,15 +1234,14 @@ class WAClient(MediaSupport):
             state = self.store.sender_key(jid)
             if state is None:
                 state = sig.new_sender_key_state()
-            data = self.encrypt_message(jid, message)
-            ciphertext = sig.group_encrypt(state, data)
-            self.store.set_sender_key(jid, state)
-            skdm = sig.build_skdm(state)
-
+            # SKDM must be built *before* group_encrypt advances the chain,
+            # otherwise receivers start at iteration N+1 and reject the
+            # message that still carries iteration N.
             memory = self.store.creds.setdefault("sender_key_memory", {})
             sent_to = memory.setdefault(jid, {})
             skdm_recipients = [recipient for recipient in recipients if recipient not in sent_to]
             if skdm_recipients:
+                skdm = sig.build_skdm(state)
                 skdm_message = {
                     "senderKeyDistributionMessage": {
                         "groupId": jid,
@@ -1140,6 +1253,9 @@ class WAClient(MediaSupport):
                 for recipient in skdm_recipients:
                     sent_to[recipient] = True
                 self.store.touch()
+            data = self.encrypt_message(jid, message)
+            ciphertext = sig.group_encrypt(state, data)
+            self.store.set_sender_key(jid, state)
             content.append(binary.Node("enc", {"v": "2", "type": "skmsg", **enc_attrs}, ciphertext))
         else:
             # enumerate both the recipient's and our own devices (the phone
